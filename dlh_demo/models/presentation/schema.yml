@@ -1,0 +1,174 @@
+version: 2
+
+# Schema documentation for presentation layer models
+# Auto-generated based on actual model columns
+
+models:
+  - name: base_data
+    description: |
+      **Materialization: EPHEMERAL**
+      
+      Model: base_data
+    columns:
+      - name: customer_id
+        description: Column customer_id
+      - name: customer_name
+        description: Column customer_name
+      - name: email
+        description: Column email
+      - name: country
+        description: Column country
+      - name: signup_date
+        description: Column signup_date
+      - name: customer_segment
+        description: Column customer_segment
+      - name: order_id
+        description: Column order_id
+      - name: order_date
+        description: Column order_date
+      - name: amount
+        description: Column amount
+      - name: product_category
+        description: Column product_category
+      - name: order_status
+        description: Column order_status
+
+  - name: stage_1_view
+    description: |
+      **Materialization: VIEW**
+      
+      Model: stage_1_view
+    columns:
+      - name: customer_id
+        description: Column customer_id
+      - name: customer_name
+        description: Column customer_name
+      - name: email
+        description: Column email
+      - name: country
+        description: Column country
+      - name: customer_segment
+        description: Column customer_segment
+      - name: order_id
+        description: Column order_id
+      - name: order_date
+        description: Column order_date
+      - name: amount
+        description: Column amount
+      - name: product_category
+        description: Column product_category
+      - name: order_status
+        description: Column order_status
+      - name: order_value_tier
+        description: Column order_value_tier
+
+  - name: stage_2_table
+    description: |
+      **Materialization: TABLE**
+      
+      Model: stage_2_table
+    columns:
+      - name: customer_id
+        description: Column customer_id
+      - name: customer_name
+        description: Column customer_name
+      - name: country
+        description: Column country
+      - name: customer_segment
+        description: Column customer_segment
+      - name: total_revenue
+        description: Column total_revenue
+      - name: avg_order_value
+        description: Column avg_order_value
+      - name: max_order_value
+        description: Column max_order_value
+      - name: min_order_value
+        description: Column min_order_value
+      - name: last_order_date
+        description: Column last_order_date
+      - name: pending_orders
+        description: Column pending_orders
+      - name: medium_value_orders
+        description: Column medium_value_orders
+      - name: low_value_orders
+        description: Column low_value_orders
+
+  - name: stage_3_incremental
+    description: |
+      **Materialization: INCREMENTAL**
+      
+      Model: stage_3_incremental
+    columns:
+      - name: order_id
+        description: Column order_id
+      - name: order_date
+        description: Column order_date
+      - name: customer_id
+        description: Column customer_id
+      - name: customer_name
+        description: Column customer_name
+      - name: country
+        description: Column country
+      - name: customer_segment
+        description: Column customer_segment
+      - name: amount
+        description: Column amount
+      - name: product_category
+        description: Column product_category
+      - name: order_status
+        description: Column order_status
+      - name: order_value_tier
+        description: Column order_value_tier
+      - name: customer_total_orders
+        description: Column customer_total_orders
+      - name: customer_total_revenue
+        description: Column customer_total_revenue
+      - name: customer_tier
+        description: Column customer_tier
+      - name: order_sequence
+        description: Column order_sequence
+      - name: customer_running_total
+        description: Column customer_running_total
+
+  - name: stage_4_reflection
+    description: |
+      **Materialization: MATERIALIZED VIEW**
+      
+      Model: stage_4_reflection
+    columns:
+      - name: EXTRACT(YEAR
+        description: Column EXTRACT(YEAR
+
+  - name: stage_5_scd_analysis
+    description: |
+      **Materialization: TABLE**
+      
+      Model: stage_5_scd_analysis
+    columns:
+      - name: h.customer_id
+        description: Column h.customer_id
+      - name: h.name
+        description: Column h.name
+      - name: h.country
+        description: Column h.country
+      - name: h.customer_segment
+        description: Column h.customer_segment
+      - name: h.dbt_valid_from
+        description: Column h.dbt_valid_from
+      - name: h.dbt_valid_to
+        description: Column h.dbt_valid_to
+      - name: h.days_valid
+        description: Column h.days_valid
+      - name: h.is_current_version
+        description: Column h.is_current_version
+      - name: h.version_number
+        description: Column h.version_number
+      - name: c.total_versions
+        description: Column c.total_versions
+      - name: c.first_seen
+        description: Column c.first_seen
+      - name: c.last_changed
+        description: Column c.last_changed
+      - name: c.historical_versions
+        description: Column c.historical_versions
+

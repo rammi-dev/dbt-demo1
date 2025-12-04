@@ -1,0 +1,291 @@
+version: 2
+
+# Sources are defined in models/normalized/sources.yml
+# This file contains only model documentation for presentation layer
+
+models:
+  - name: base_data
+    description: |
+      **Materialization: EPHEMERAL**
+      
+      Foundation model that joins customers and orders. This model exists only as a CTE
+      and is not persisted in Dremio. It demonstrates ephemeral materialization.
+    columns:
+      - name: customer_id
+        description: Customer identifier
+        # Note: Tests on ephemeral models may have issues during docs generation
+        # tests:
+        #   - not_null
+        #   - dbt_expectations.expect_column_values_to_be_of_type:
+        #       column_type: int
+      - name: order_id
+        description: Order identifier
+      - name: order_value_tier
+        description: Calculated tier based on order amount (High/Medium/Low Value)
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['High Value', 'Medium Value', 'Low Value']
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: amount
+        description: Order amount
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 10000
+              config:
+                tags: ['data_quality', 'great_expectations']
+  
+  - name: stage_1_view
+    description: |
+      **Materialization: VIEW**
+      
+      Logical view layer that adds date extractions and calculated fields.
+      This view does not store data physically - queries execute in real-time.
+    columns:
+      - name: order_year
+        description: Year extracted from order_date
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 2020
+              max_value: 2030
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: order_month
+        description: Month extracted from order_date
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 12
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: days_since_signup
+        description: Number of days between signup and order
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 3650  # ~10 years
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: is_completed
+        description: Binary flag indicating if order is completed
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: [0, 1]
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: country
+        description: Customer country
+        tests:
+          - dbt_expectations.expect_column_values_to_not_be_null:
+              config:
+                tags: ['data_quality', 'great_expectations']
+  
+  - name: stage_2_table
+    description: |
+      **Materialization: TABLE (Iceberg)**
+      
+      Physical Iceberg table with customer-level aggregations. This table is fully
+      materialized and provides fast query performance. Full refresh on each run.
+    columns:
+      - name: customer_id
+        description: Customer identifier
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: int
+      - name: total_orders
+        description: Total number of orders for this customer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1000
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: total_revenue
+        description: Sum of all order amounts for this customer
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100000
+              tags: ['data_quality', 'great_expectations']
+      - name: avg_order_value
+        description: Average order value for this customer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 10000
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: customer_tier
+        description: Calculated tier based on total revenue (VIP/Regular/New)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['VIP', 'Regular', 'New']
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: customer_segment
+        description: Customer segment classification
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Premium', 'Standard']
+              config:
+                tags: ['data_quality', 'great_expectations']
+  
+  - name: stage_3_incremental
+    description: |
+      **Materialization: INCREMENTAL (Iceberg with Partitioning)**
+      
+      Incremental Iceberg table that processes only new/changed data using partition filtering.
+      Demonstrates the get_partition_filter macro with environment variable support.
+      Uses merge strategy to update existing records.
+    config:
+      materialized: incremental
+      unique_key: order_id
+      incremental_strategy: merge
+      partition_by: order_date
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 1
+          max_value: 100000
+          config:
+            tags: ['data_quality', 'great_expectations']
+    columns:
+      - name: order_id
+        description: Unique order identifier
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: int
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: order_date
+        description: Date of the order
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "'2020-01-01'"
+              max_value: "'2030-12-31'"
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: order_sequence
+        description: Sequential order number for each customer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 1000
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: customer_running_total
+        description: Running total of order amounts for each customer
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100000
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: last_updated_at
+        description: Timestamp when record was last processed
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_not_be_null:
+              config:
+                tags: ['data_quality', 'great_expectations']
+      - name: is_first_order
+        description: Flag indicating if this is customer's first order
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_type_list:
+              column_type_list: [boolean, bool]
+              config:
+                tags: ['data_quality', 'great_expectations']
+  
+  - name: stage_4_reflection
+    description: |
+      **Materialization: MATERIALIZED VIEW (Dremio Reflection)**
+      
+      Dremio Reflection providing pre-aggregated KPIs for dashboard queries.
+      Automatically refreshes and optimizes query performance through query rewrite.
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 1
+          max_value: 10000
+          tags: ['data_quality', 'great_expectations']
+    columns:
+      - name: order_date
+        description: Date dimension for aggregations
+        tests:
+          - not_null
+      - name: unique_customers
+        description: Count of distinct customers
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 10000
+              tags: ['data_quality', 'great_expectations']
+      - name: total_revenue
+        description: Sum of all order amounts
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1000000
+              tags: ['data_quality', 'great_expectations']
+      - name: revenue_per_customer
+        description: Average revenue per customer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100000
+              tags: ['data_quality', 'great_expectations']
+      - name: avg_customer_lifetime_value
+        description: Average customer lifetime value based on running totals
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100000
+              tags: ['data_quality', 'great_expectations']
+  
+  - name: stage_5_scd_analysis
+    description: |
+      **Materialization: TABLE**
+      **Purpose: Slowly Changing Dimension Analysis**
+      
+      Demonstrates using snapshot data to analyze historical customer changes.
+      Shows how to query SCD Type 2 data for temporal analysis.
+    columns:
+      - name: customer_id
+        description: Customer identifier
+        tests:
+          - not_null
+      - name: is_current_version
+        description: Flag indicating if this is the current version
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_type_list:
+              column_type_list: [boolean, bool]
+              tags: ['data_quality', 'great_expectations']
+      - name: version_number
+        description: Version number for each customer record
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 100
+              tags: ['data_quality', 'great_expectations']
+      - name: total_versions
+        description: Total number of versions for this customer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 100
+              tags: ['data_quality', 'great_expectations']
+      - name: days_valid
+        description: Number of days this version was valid
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 3650
+              tags: ['data_quality', 'great_expectations']
+

@@ -1,0 +1,13 @@
+dlh_demo:
+  outputs:
+    dev:
+      # enterprise_catalog_folder: warehouse  # Removed to create schemas directly under nessie
+      enterprise_catalog_namespace: nessie
+      password: rami123!
+      port: 9047
+      software_host: 127.0.0.1
+      threads: 2
+      type: dremio
+      use_ssl: false
+      user: rami  
+  target: dev

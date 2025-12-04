@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: customer_orders
+    description: "Join of customers and orders tables from Nessie Iceberg catalog"
+    columns:
+      - name: customer_id
+        description: "Unique identifier for the customer (can appear multiple times due to multiple orders)"
+        tests:
+          - not_null:
+              tags: ['customer_orders', 'data_quality', 'critical']
+              severity: error  # This test will stop execution if it fails
+              error_if: ">0"   # Fail if any nulls are found
+          # Commented out: customer_id is not unique in this model due to LEFT JOIN with orders
+          # - dbt_expectations.expect_column_values_to_be_unique:
+          #     tags: ['customer_orders', 'data_quality', 'unique', 'great_expectations']
+      - name: name
+        description: "Customer name"
+      - name: country
+        description: "Customer country"
+      - name: order_id
+        description: "Order ID, if any"
+      - name: amount
+        description: "Order amount, if any"

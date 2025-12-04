@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: nessie
+    database: nessie
+    schema: raw
+    description: "Raw source tables in Nessie catalog containing Iceberg tables"
+    tables:
+      - name: customers_iceberg
+        description: "Raw customer data from source system"
+      - name: orders_iceberg
+        description: "Raw order transactions from source system"
+

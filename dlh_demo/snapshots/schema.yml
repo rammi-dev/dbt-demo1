@@ -1,0 +1,96 @@
+version: 2
+
+snapshots:
+  - name: customers_snapshot
+    description: |
+      **Snapshot Strategy: TIMESTAMP**
+      **SCD Type: Type 2 (Slowly Changing Dimension)**
+      
+      Tracks historical changes to customer records using timestamp-based detection.
+      Each change creates a new version with dbt_valid_from and dbt_valid_to timestamps.
+      
+      This snapshot demonstrates:
+      - Timestamp strategy for change detection
+      - Historical customer attribute tracking
+      - Point-in-time customer analysis
+      - Audit trail for customer data
+    columns:
+      - name: customer_id
+        description: Unique customer identifier (part of unique_key)
+        tests:
+          - not_null
+      - name: name
+        description: Customer name (tracked for changes)
+      - name: email
+        description: Customer email (tracked for changes)
+      - name: country
+        description: Customer country (tracked for changes)
+      - name: customer_segment
+        description: Customer segment - Premium or Standard (tracked for changes)
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Premium', 'Standard']
+              tags: ['data_quality', 'great_expectations', 'snapshot']
+      - name: dbt_valid_from
+        description: Timestamp when this version became valid
+        tests:
+          - not_null
+      - name: dbt_valid_to
+        description: Timestamp when this version became invalid (NULL for current version)
+      - name: dbt_updated_at
+        description: Timestamp when this snapshot record was created/updated
+        tests:
+          - not_null
+
+  - name: orders_snapshot
+    description: |
+      **Snapshot Strategy: CHECK**
+      **SCD Type: Type 2 (Slowly Changing Dimension)**
+      
+      Tracks historical changes to order records using check column comparison.
+      Monitors changes to order_status and amount fields.
+      
+      This snapshot demonstrates:
+      - Check strategy for change detection
+      - Order status change tracking (Pending → Completed)
+      - Order amount modification history
+      - Flexible change detection without timestamp column
+    columns:
+      - name: order_id
+        description: Unique order identifier (part of unique_key)
+        tests:
+          - not_null
+      - name: customer_id
+        description: Customer who placed the order
+        tests:
+          - not_null
+      - name: order_date
+        description: Date of the order
+        tests:
+          - not_null
+      - name: amount
+        description: Order amount (monitored for changes)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 10000
+              tags: ['data_quality', 'great_expectations', 'snapshot']
+      - name: product_category
+        description: Product category
+      - name: order_status
+        description: Order status - Completed or Pending (monitored for changes)
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Completed', 'Pending']
+              tags: ['data_quality', 'great_expectations', 'snapshot']
+      - name: dbt_valid_from
+        description: Timestamp when this version became valid
+        tests:
+          - not_null
+      - name: dbt_valid_to
+        description: Timestamp when this version became invalid (NULL for current version)
+      - name: dbt_updated_at
+        description: Timestamp when this snapshot record was created/updated
+        tests:
+          - not_null
