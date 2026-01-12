@@ -29,8 +29,7 @@
       target_schema='dlh_demo_snapshots',
       unique_key='customer_id',
       strategy='timestamp',
-      updated_at='signup_date',
-      invalidate_hard_deletes=True,
+      updated_at='updated_at',
       tags=['presentation', 'snapshot', 'scd']
     )
 }}
@@ -42,7 +41,20 @@ SELECT
     country,
     signup_date,
     customer_segment,
+    updated_at,
     CURRENT_TIMESTAMP AS snapshot_timestamp
-FROM {{ source('nessie', 'customers_iceberg') }}
+FROM (
+    SELECT
+        customer_id,
+        name,
+        email,
+        country,
+        signup_date,
+        customer_segment,
+        CAST(signup_date AS TIMESTAMP) AS updated_at,
+        ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY signup_date DESC) AS rn
+    FROM {{ source('nessie', 'customers_iceberg') }}
+) ranked
+WHERE rn = 1
 
 {% endsnapshot %}

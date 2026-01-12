@@ -5,29 +5,168 @@ This document outlines the step-by-step process to demonstrate the dbt project w
 ## Prerequisites
 - Dremio instance running with Nessie catalog configured as `nessie`.
 - dbt configured with `dlh_demo` profile.
-- Activate dbt virtual environment: `source dbt-test/bin/activate`
+- Python 3.8+ and [uv](https://github.com/astral-sh/uv) installed.
+- Create and activate the virtual environment with uv:
 
-## Environment Targets
-
-This project supports multiple environments via dbt targets:
-
-- **`dev`** (default): Local development environment
-- **`integration`**: Integration/staging environment
-- **`prod`**: Production environment
-
-To run against a specific target:
 ```bash
-# Development (default)
-dbt run
+# From the repo root
+cd /home/ca743/Work/repos/dbt-demo1
 
-# Integration
-dbt run --target integration
+# Create venv and install dbt-dremio
+uv venv
+source .venv/bin/activate
+uv pip install dbt-dremio
 
-# Production
-dbt run --target prod
+# Point dbt to the repo-level profiles.yml
+export DBT_PROFILES_DIR=$(pwd)
+cd dlh_demo
 ```
 
-All commands below use the default `dev` target. To use a different target, add `--target <name>` to any dbt command.
+All dbt commands below assume you are in the `dlh_demo` directory, the venv is active, and `DBT_PROFILES_DIR` is set.
+
+## Step 0: Verify dbt Configuration
+
+Run `dbt debug` to confirm profile, adapter, and Dremio connectivity are working:
+
+```bash
+dbt debug
+```
+
+*Expected Output:*
+- All checks pass (profile found, adapter installed, connection successful)
+
+If `dbt debug` fails, check:
+- `DBT_PROFILES_DIR` is set to the repo root (where `profiles.yml` lives)
+- `dbt-dremio` adapter is installed in your venv
+- Dremio is running and reachable at `127.0.0.1:9047`
+- User/password in `profiles.yml` match your Dremio credentials
+
+## Step 0.5: Install dbt Package Dependencies
+
+Install packages defined in `packages.yml` (e.g., `dbt_expectations`):
+
+```bash
+dbt deps
+```
+
+*Expected Output:*
+- Packages installed to `dbt_packages/`
+
+If you skip this step, you'll see:
+> Compilation Error: dbt found 1 package(s) specified in packages.yml, but only 0 package(s) installed in dbt_packages.
+
+## Configure Nessie Catalog in Dremio (Storage Tab)
+If you haven’t wired Dremio to your Nessie + MinIO/S3 storage yet, add a Nessie source and complete the Storage Tab settings:
+
+1. In Dremio UI, go to Sources → Add Source → select "Nessie" (or "Arctic/Nessie").
+2. Basic settings:
+	- Source Name: `nessie` (matches the catalog name used by dbt)
+	- Endpoint URL: `http://nessie:19120`
+	- Default Branch: `main`
+	- Authentication: None (for the demo setup)
+3. Storage Tab (links Nessie to your data lake storage):
+	- Storage Type: S3-compatible (MinIO or AWS S3)
+	- Access Key / Secret Key: provide your storage credentials
+	- Root Path: base path for Iceberg tables (use bucket name only, e.g., `warehouse` — no leading slash)
+	- Region: `us-east-1`
+	- Path-style access: ON
+	- Compatibility mode: ON
+	- Endpoint (for MinIO): `http://minio:9000`
+	- API verification (host-side): `http://localhost:19120/api/v1/trees` and `http://localhost:19120/api/v2/trees` should return 200. Inside containers, use `http://nessie:19120`.
+4. Connection Properties (click "Add Property") — essential for S3-compatible storage:
+	- Name: `fs.s3a.path.style.access` | Value: `true`
+	- Name: `fs.s3a.endpoint` | Value: `minio:9000` (or your S3-compatible host:port)
+	- Name: `fs.s3a.connection.ssl.enabled` | Value: `false` (use HTTP for MinIO)
+
+### Troubleshooting table creation (Iceberg writes)
+
+If you see errors like `Failed to write manifest list file` when creating tables:
+- Ensure the bucket exists (e.g., `warehouse`) and Root Path is exactly that bucket name (no leading slash)
+- Confirm Path-style access and Compatibility mode are ON
+- Verify connection properties above (especially `fs.s3a.connection.ssl.enabled=false` for MinIO)
+- Create the `raw` namespace/folder under `nessie` if it doesn’t exist
+- Try a minimal CTAS to validate write path:
+
+```sql
+CREATE TABLE nessie.raw.ctas_test AS SELECT 1 AS id;
+```
+
+If CTAS fails, check the Dremio job error details (AccessDenied / NoSuchBucket / UnknownHost) and adjust credentials, bucket, or endpoint accordingly.
+5. Click "Test", then "Save". You should see a top-level catalog entry named `nessie` in Dremio.
+
+Tip: Create the bucket (e.g., `warehouse`) in MinIO Console at `http://localhost:9001` (user: `admin`, password: `password`) before saving the source.
+
+### Resetting Nessie (Clean Slate)
+
+The demo Nessie server uses **in-memory storage**, so all data (tables, namespaces) is lost on restart. To reset Nessie and start fresh:
+
+```bash
+# From repo root
+docker compose restart nessie
+```
+
+⚠️ **After restarting Nessie:**
+1. Refresh the Nessie source in Dremio (or re-add it if needed)
+2. Re-run the setup SQL scripts (`01_create_source_tables.sql`, `02_insert_initial_data.sql`)
+3. Re-run `dbt snapshot` and `dbt run`
+
+This is useful when you want to:
+- Delete unwanted namespaces/schemas
+- Start the demo from scratch
+- Clear corrupted or test data
+
+## Environment target
+
+This project currently defines only one dbt target: `dev`.
+
+- The active profile in `profiles.yml` is:
+	- `dlh_demo.target: dev`
+	- Only `dlh_demo.outputs.dev` is present
+
+If you need `integration` or `prod`, add corresponding outputs to `profiles.yml` and switch with `--target <name>`. Example:
+
+```yaml
+dlh_demo:
+	target: dev
+	outputs:
+		dev:
+			type: dremio
+			software_host: 127.0.0.1
+			port: 9047
+			user: rami
+			password: rami123!
+			enterprise_catalog_namespace: nessie
+			use_ssl: false
+			threads: 2
+		integration:
+			type: dremio
+			software_host: integration-host
+			port: 9047
+			user: <user>
+			password: <password>
+			enterprise_catalog_namespace: nessie
+			use_ssl: false
+			threads: 2
+		prod:
+			type: dremio
+			software_host: prod-host
+			port: 9047
+			user: <user>
+			password: <password>
+			enterprise_catalog_namespace: nessie
+			use_ssl: false
+			threads: 2
+```
+
+Once added, you can run:
+
+```bash
+dbt run                      # uses dev
+dbt run --target integration # after you define it
+dbt run --target prod        # after you define it
+```
+
+Below, commands assume the default `dev` target.
 
 ## Step 1: Setup Source Tables (DDL)
 Run the DDL script to create the Iceberg tables in the Nessie catalog.
@@ -169,3 +308,25 @@ dbt run --select tag:presentation
 # Run models that have changed since last run
 dbt run --select state:modified --state ./target
 ```
+
+### Serve dbt Documentation
+Generate and serve interactive documentation for your dbt project:
+
+```bash
+# Generate documentation (catalog + manifest)
+dbt docs generate
+
+# Serve documentation locally (opens browser at http://localhost:8080)
+dbt docs serve
+
+# Serve on a specific port
+dbt docs serve --port 8081
+```
+
+*Documentation includes:*
+- Model lineage graph (DAG)
+- Model descriptions and column details
+- Test coverage
+- Source definitions
+- Snapshot configurations
+

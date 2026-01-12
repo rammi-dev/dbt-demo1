@@ -17,7 +17,7 @@
 */
 
 {{ config(
-    materialized='table',
+    materialized='view',
     database='nessie',
     schema='dlh_demo_presentation',
     tags=['presentation', 'stage_1']

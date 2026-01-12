@@ -12,6 +12,8 @@
     - Order frequency patterns
 */
 
+-- depends_on: {{ ref('customers_snapshot') }}
+
 {{ config(
     materialized='table',
     database='nessie',
@@ -27,8 +29,8 @@ WITH history AS (
         customer_segment,
         dbt_valid_from,
         dbt_valid_to,
-        -- Calculate duration of each version
-        DATE_DIFF(COALESCE(dbt_valid_to, CURRENT_DATE), dbt_valid_from) AS days_valid,
+        -- Calculate duration of each version (Dremio syntax)
+        TIMESTAMPDIFF(DAY, dbt_valid_from, COALESCE(dbt_valid_to, CURRENT_TIMESTAMP)) AS days_valid,
         -- Flag current version
         CASE WHEN dbt_valid_to IS NULL THEN TRUE ELSE FALSE END AS is_current_version,
         -- Version sequence
@@ -42,8 +44,8 @@ customer_stats AS (
         COUNT(*) AS total_versions,
         MIN(dbt_valid_from) AS first_seen,
         MAX(dbt_valid_from) AS last_changed,
-        -- Aggregate historical segments
-        LISTAGG(customer_segment, ' -> ') WITHIN GROUP (ORDER BY dbt_valid_from) AS historical_versions
+        -- Aggregate historical segments (using version_number for ordering)
+        LISTAGG(customer_segment, ' -> ') AS historical_versions
     FROM history
     GROUP BY customer_id
 )

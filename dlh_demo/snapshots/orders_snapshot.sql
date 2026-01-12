@@ -28,9 +28,8 @@
       target_database='nessie',
       target_schema='dlh_demo_snapshots',
       unique_key='order_id',
-      strategy='check',
-      check_cols=['order_status', 'amount'],
-      invalidate_hard_deletes=True,
+      strategy='timestamp',
+      updated_at='updated_at',
       tags=['presentation', 'snapshot', 'scd']
     )
 }}
@@ -42,10 +41,20 @@ SELECT
     amount,
     product_category,
     order_status,
+    updated_at,
     CURRENT_TIMESTAMP AS snapshot_timestamp
-FROM {{ source('nessie', 'orders_iceberg') }}
-{% if var('snapshot_lookback_days', none) %}
-WHERE order_date >= CURRENT_DATE - INTERVAL '{{ var('snapshot_lookback_days') }}' DAY
-{% endif %}
+FROM (
+    SELECT
+        order_id,
+        customer_id,
+        order_date,
+        amount,
+        product_category,
+        order_status,
+        CAST(order_date AS TIMESTAMP) AS updated_at,
+        ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY order_date DESC) AS rn
+    FROM {{ source('nessie', 'orders_iceberg') }}
+) ranked
+WHERE rn = 1
 
 {% endsnapshot %}
