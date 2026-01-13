@@ -203,7 +203,7 @@ dbt snapshot
 Run the dbt project to materialize all models.
 
 ```bash
-dbt run
+    dbt run
 ```
 
 *Expected Output:*
@@ -329,4 +329,219 @@ dbt docs serve --port 8081
 - Test coverage
 - Source definitions
 - Snapshot configurations
+
+---
+
+## Complete Incremental Flow (End-to-End)
+
+This section demonstrates a complete incremental data pipeline from initial load through multiple incremental updates.
+
+### Prerequisites
+- Nessie restarted (clean slate): `docker compose restart nessie`
+- Nessie catalog configured in Dremio (see above)
+- Virtual environment active with dbt-dremio installed
+
+### Phase 1: Initial Setup and Full Load
+
+```bash
+# 1. Navigate to project directory
+cd /home/ca743/Work/repos/dbt-demo1
+source .venv/bin/activate
+export DBT_PROFILES_DIR=$(pwd)
+cd dlh_demo
+
+# 2. Verify dbt configuration
+dbt debug
+
+# 3. Install package dependencies
+dbt deps
+```
+
+**In Dremio SQL Runner:**
+```sql
+-- 4. Create source tables (DDL)
+-- Run: setup/01_create_source_tables.sql
+
+-- 5. Insert initial data (Partitions 1-5: 2024-01-01 to 2024-01-05)
+-- Run: setup/02_insert_initial_data.sql
+```
+
+```bash
+# 6. Run initial snapshots
+dbt snapshot
+
+# 7. Run all models (full load)
+dbt run
+
+# 8. Verify with tests
+dbt test
+```
+
+*Expected State After Phase 1:*
+- Source tables: `orders_iceberg` (20 rows), `customers_iceberg` (10 rows)
+- Snapshots created in `dlh_demo_snapshots`
+- All presentation models materialized
+- `stage_3_incremental`: 20 rows (all initial data)
+
+### Phase 2: First Incremental Update
+
+**In Dremio SQL Runner:**
+```sql
+-- 1. Insert new orders for 2024-01-06 (Partition 6)
+-- Run: setup/03_insert_incremental_data.sql
+```
+
+```bash
+# 2. Refresh upstream models FIRST (stage_1_view and stage_2_table)
+# These must be refreshed before incremental, as stage_3 depends on them
+dbt run --select stage_1_view stage_2_table
+
+# 3. Set partition date for incremental processing
+export DBT_PARTITION_DATE='2024-01-06'
+
+# 4. Run incremental model (appends only new partition data)
+dbt run --select stage_3_incremental
+
+# OR: Run all in correct dependency order with one command
+dbt run --select +stage_3_incremental
+
+# 5. Update snapshots to capture any changes
+dbt snapshot
+
+# 6. Refresh downstream models
+dbt run --select stage_4_reflection stage_5_scd_analysis
+```
+
+*Expected State After Phase 2:*
+- `stage_1_view`: Refreshed with new orders
+- `stage_2_table`: Refreshed with updated customer aggregations
+- `stage_3_incremental`: 24 rows (+4 new orders from partition 6)
+- Snapshots updated with new order data
+
+**Important:** The `+` prefix in `+stage_3_incremental` runs all upstream dependencies first:
+- `stage_1_view` (depends on `base_data` ephemeral)
+- `stage_2_table` (depends on `stage_1_view`)
+- Then `stage_3_incremental`
+
+### Phase 3: SCD Type 2 Update (Record Changes)
+
+**In Dremio SQL Runner:**
+```sql
+-- 1. Insert updated versions of existing records
+-- Run: setup/04_update_data_for_scd.sql
+-- This inserts new rows with same keys but newer timestamps
+```
+
+```bash
+# 2. Run snapshots to capture SCD changes
+dbt snapshot
+
+# 3. Check snapshot results (should show rows with dbt_valid_to populated)
+# Query in Dremio:
+# SELECT customer_id, customer_segment, dbt_valid_from, dbt_valid_to
+# FROM nessie.dlh_demo_snapshots.customers_snapshot
+# WHERE customer_id IN (1, 2, 4, 5, 8, 10)
+# ORDER BY customer_id, dbt_valid_from;
+
+# 4. Refresh SCD analysis model
+dbt run --select stage_5_scd_analysis
+```
+
+*Expected State After Phase 3:*
+- `customers_snapshot`: Historical versions with `dbt_valid_to` populated
+- `orders_snapshot`: Historical versions of updated orders
+- `stage_5_scd_analysis`: Shows customer change history
+
+### Phase 4: Additional Incremental Partition
+
+**In Dremio SQL Runner:**
+```sql
+-- 1. Add more data for 2024-01-07 (Partition 7)
+INSERT INTO nessie.raw.orders_iceberg 
+(order_id, customer_id, order_date, amount, product_category, order_status)
+VALUES
+    (1025, 1, DATE '2024-01-07', 225.00, 'Electronics', 'Pending'),
+    (1026, 3, DATE '2024-01-07', 89.99, 'Books', 'Completed'),
+    (1027, 7, DATE '2024-01-07', 350.00, 'Home & Garden', 'Pending');
+```
+
+```bash
+# 2. Update partition date
+export DBT_PARTITION_DATE='2024-01-07'
+
+# 3. Refresh ALL upstream + incremental in one command
+dbt run --select +stage_3_incremental
+
+# This runs in dependency order:
+# 1. base_data (ephemeral - compiled inline)
+# 2. stage_1_view (refreshed with new data)
+# 3. stage_2_table (refreshed with new aggregations)
+# 4. stage_3_incremental (appends partition 7 only)
+
+# 4. Verify row count increased
+# Query: SELECT COUNT(*) FROM nessie.dlh_demo_presentation.stage_3_incremental
+```
+
+### Troubleshooting Incremental Models
+
+**Error: "table already exists"**
+
+This is a known issue with dbt-dremio adapter. The adapter doesn't properly detect existing tables for incremental processing.
+
+*Solution 1: Drop and recreate*
+```sql
+-- In Dremio SQL Runner
+DROP TABLE nessie.dlh_demo_presentation.stage_3_incremental;
+```
+```bash
+dbt run --select stage_3_incremental --full-refresh
+```
+
+*Solution 2: Drop leftover temp table*
+```sql
+-- In Dremio SQL Runner
+DROP TABLE IF EXISTS nessie.dlh_demo_presentation."stage_3_incremental__dbt_tmp";
+```
+
+**Understanding Incremental Strategy**
+
+dbt-dremio 1.10.0 only supports `incremental_strategy='append'`:
+- ✅ `append`: Inserts new rows (no updates to existing)
+- ❌ `merge`: Not supported by dbt-dremio adapter
+- ❌ `delete+insert`: Not supported
+
+With `append` strategy:
+1. Use `is_incremental()` to filter only NEW data
+2. Set `DBT_PARTITION_DATE` environment variable
+3. The macro `get_partition_filter` builds the WHERE clause
+
+**Macro: get_partition_filter**
+```sql
+-- Example generated SQL when DBT_PARTITION_DATE='2024-01-06':
+WHERE order_date = DATE '2024-01-06'
+```
+
+### Verification Queries
+
+Run these in Dremio SQL Runner to verify incremental processing:
+
+```sql
+-- Check row counts by partition
+SELECT order_date, COUNT(*) as row_count
+FROM nessie.dlh_demo_presentation.stage_3_incremental
+GROUP BY order_date
+ORDER BY order_date;
+
+-- Check snapshot history
+SELECT customer_id, customer_segment, dbt_valid_from, dbt_valid_to,
+       CASE WHEN dbt_valid_to IS NULL THEN 'CURRENT' ELSE 'HISTORICAL' END as status
+FROM nessie.dlh_demo_snapshots.customers_snapshot
+ORDER BY customer_id, dbt_valid_from;
+
+-- Check SCD analysis
+SELECT customer_id, total_versions, historical_versions
+FROM nessie.dlh_demo_presentation.stage_5_scd_analysis
+WHERE is_current_version = true
+ORDER BY total_versions DESC;
+```
 

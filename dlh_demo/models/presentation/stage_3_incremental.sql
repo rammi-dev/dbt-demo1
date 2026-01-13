@@ -9,7 +9,7 @@
     This model demonstrates:
     - Partition filtering using environment variables (via get_partition_filter macro)
     - Incremental logic with is_incremental() check
-    - Merge strategy for updating existing records
+    - Append strategy for inserting new records (dbt-dremio only supports 'append')
     - Iceberg partitioning for efficient incremental refresh
     
     Environment Variable Usage:
@@ -26,11 +26,12 @@
 {{ config(
     materialized='incremental',
     unique_key='order_id',
-    incremental_strategy='merge',
+    incremental_strategy='append',
     partition_by='order_date',
     database='nessie',
     schema='dlh_demo_presentation',
-    tags=['presentation', 'stage_3', 'incremental']
+    tags=['presentation', 'stage_3', 'incremental'],
+    pre_hook="DROP TABLE IF EXISTS nessie.dlh_demo_presentation.stage_3_incremental__dbt_backup"
 ) }}
 
 WITH daily_order_summary AS (
@@ -66,7 +67,7 @@ WITH daily_order_summary AS (
         ON v.customer_id = t.customer_id
     
     {% if is_incremental() %}
-        -- Incremental filter using partition macro
+        -- Incremental filter: only process new partitions
         WHERE {{ get_partition_filter(partition_column='order_date', start_date_var='DBT_PARTITION_DATE', default_days_back=7, use_range=false) }}
     {% endif %}
 )

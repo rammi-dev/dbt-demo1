@@ -10,10 +10,7 @@ models:
           - not_null:
               tags: ['customer_orders', 'data_quality', 'critical']
               severity: error  # This test will stop execution if it fails
-              error_if: ">0"   # Fail if any nulls are found
-          # Commented out: customer_id is not unique in this model due to LEFT JOIN with orders
-          # - dbt_expectations.expect_column_values_to_be_unique:
-          #     tags: ['customer_orders', 'data_quality', 'unique', 'great_expectations']
+              error_if: ">0"   # Fail if any nulls are founds
       - name: name
         description: "Customer name"
       - name: country

@@ -26,47 +26,52 @@ VALUES
 -- Insert Orders Data (Partitions 1-5)
 -- =====================================================
 
--- Orders for 2024-01-01 (Partition 1)
-INSERT INTO nessie.raw.orders_iceberg 
-(order_id, customer_id, order_date, amount, product_category, order_status)
-VALUES
-    (1001, 1, DATE '2024-01-01', 150.00, 'Electronics', 'Completed'),
-    (1002, 2, DATE '2024-01-01', 75.50, 'Books', 'Completed'),
-    (1003, 3, DATE '2024-01-01', 220.00, 'Clothing', 'Completed'),
-    (1004, 4, DATE '2024-01-01', 99.99, 'Electronics', 'Completed');
 
--- Orders for 2024-01-02 (Partition 2)
+-- Orders for 2026-01-01 (Partition 1)
 INSERT INTO nessie.raw.orders_iceberg 
 (order_id, customer_id, order_date, amount, product_category, order_status)
 VALUES
-    (1005, 5, DATE '2024-01-02', 450.00, 'Electronics', 'Completed'),
-    (1006, 1, DATE '2024-01-02', 125.00, 'Home & Garden', 'Completed'),
-    (1007, 6, DATE '2024-01-02', 89.99, 'Books', 'Completed'),
-    (1008, 7, DATE '2024-01-02', 310.00, 'Clothing', 'Completed');
+    (1001, 1, DATE '2026-01-01', 150.00, 'Electronics', 'Completed'),
+    (1002, 2, DATE '2026-01-01', 75.50, 'Books', 'Completed'),
+    (1003, 3, DATE '2026-01-01', 220.00, 'Clothing', 'Completed'),
+    (1004, 4, DATE '2026-01-01', 99.99, 'Electronics', 'Completed');
 
--- Orders for 2024-01-03 (Partition 3)
-INSERT INTO nessie.raw.orders_iceberg 
-(order_id, customer_id, order_date, amount, product_category, order_status)
-VALUES
-    (1009, 8, DATE '2024-01-03', 199.99, 'Electronics', 'Completed'),
-    (1010, 2, DATE '2024-01-03', 55.00, 'Books', 'Completed'),
-    (1011, 9, DATE '2024-01-03', 175.50, 'Clothing', 'Completed'),
-    (1012, 3, DATE '2024-01-03', 420.00, 'Electronics', 'Completed');
 
--- Orders for 2024-01-04 (Partition 4)
+-- Orders for 2026-01-02 (Partition 2)
 INSERT INTO nessie.raw.orders_iceberg 
 (order_id, customer_id, order_date, amount, product_category, order_status)
 VALUES
-    (1013, 10, DATE '2024-01-04', 88.00, 'Home & Garden', 'Completed'),
-    (1014, 4, DATE '2024-01-04', 145.00, 'Electronics', 'Completed'),
-    (1015, 5, DATE '2024-01-04', 210.00, 'Clothing', 'Completed'),
-    (1016, 6, DATE '2024-01-04', 95.50, 'Books', 'Completed');
+    (1005, 5, DATE '2026-01-02', 450.00, 'Electronics', 'Completed'),
+    (1006, 1, DATE '2026-01-02', 125.00, 'Home & Garden', 'Completed'),
+    (1007, 6, DATE '2026-01-02', 89.99, 'Books', 'Completed'),
+    (1008, 7, DATE '2026-01-02', 310.00, 'Clothing', 'Completed');
 
--- Orders for 2024-01-05 (Partition 5)
+
+-- Orders for 2026-01-03 (Partition 3)
 INSERT INTO nessie.raw.orders_iceberg 
 (order_id, customer_id, order_date, amount, product_category, order_status)
 VALUES
-    (1017, 7, DATE '2024-01-05', 330.00, 'Electronics', 'Completed'),
-    (1018, 8, DATE '2024-01-05', 125.00, 'Clothing', 'Completed'),
-    (1019, 1, DATE '2024-01-05', 67.99, 'Books', 'Completed'),
-    (1020, 9, DATE '2024-01-05', 275.00, 'Home & Garden', 'Completed');
+    (1009, 8, DATE '2026-01-03', 199.99, 'Electronics', 'Completed'),
+    (1010, 2, DATE '2026-01-03', 55.00, 'Books', 'Completed'),
+    (1011, 9, DATE '2026-01-03', 175.50, 'Clothing', 'Completed'),
+    (1012, 3, DATE '2026-01-03', 420.00, 'Electronics', 'Completed');
+
+
+-- Orders for 2026-01-04 (Partition 4)
+INSERT INTO nessie.raw.orders_iceberg 
+(order_id, customer_id, order_date, amount, product_category, order_status)
+VALUES
+    (1013, 10, DATE '2026-01-04', 88.00, 'Home & Garden', 'Completed'),
+    (1014, 4, DATE '2026-01-04', 145.00, 'Electronics', 'Completed'),
+    (1015, 5, DATE '2026-01-04', 210.00, 'Clothing', 'Completed'),
+    (1016, 6, DATE '2026-01-04', 95.50, 'Books', 'Completed');
+
+
+-- Orders for 2026-01-05 (Partition 5)
+INSERT INTO nessie.raw.orders_iceberg 
+(order_id, customer_id, order_date, amount, product_category, order_status)
+VALUES
+    (1017, 7, DATE '2026-01-05', 330.00, 'Electronics', 'Completed'),
+    (1018, 8, DATE '2026-01-05', 125.00, 'Clothing', 'Completed'),
+    (1019, 1, DATE '2026-01-05', 67.99, 'Books', 'Completed'),
+    (1020, 9, DATE '2026-01-05', 275.00, 'Home & Garden', 'Completed');

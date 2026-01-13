@@ -55,6 +55,7 @@ FROM (
         ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY order_date DESC) AS rn
     FROM {{ source('nessie', 'orders_iceberg') }}
 ) ranked
-WHERE rn = 1
+        WHERE rn = 1
+          AND order_date >= CURRENT_DATE - INTERVAL '{{ var('snapshot_lookback_days', 30) }}' DAY
 
 {% endsnapshot %}

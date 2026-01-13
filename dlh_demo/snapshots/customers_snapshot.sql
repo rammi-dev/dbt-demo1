@@ -55,6 +55,7 @@ FROM (
         ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY signup_date DESC) AS rn
     FROM {{ source('nessie', 'customers_iceberg') }}
 ) ranked
-WHERE rn = 1
+        WHERE rn = 1
+          AND signup_date >= CURRENT_DATE - INTERVAL '{{ var('snapshot_lookback_days', 30) }}' DAY
 
 {% endsnapshot %}
